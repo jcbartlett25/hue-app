@@ -1,123 +1,207 @@
+// Copyright 2017 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:english_words/english_words.dart';
 
-void main() => runApp(MyApp());
-
-class MyApp extends StatelessWidget {
+class AnimatedListSample extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Startup Name Generator!',
-      theme: new ThemeData(          // Add the 3 lines from here... 
-        primaryColor: Colors.black,
-      ), 
-      home: RandomWords(),
-    );
-  }
+  _AnimatedListSampleState createState() => _AnimatedListSampleState();
 }
 
-class RandomWordsState extends State<RandomWords> {
-  final _suggestions = <WordPair>[];
-  final Set<WordPair> _saved = new Set<WordPair>();
-  final _biggerFont = const TextStyle(fontSize: 18.0);
-  
+class _AnimatedListSampleState extends State<AnimatedListSample> {
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  ListModel<int> _list;
+  int _selectedItem;
+  int _nextItem; // The next item inserted when the user presses the '+' button.
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold (
-      appBar: AppBar(
-        title: Text('Startup Name Generator'),
-        actions: <Widget>[      
-          new IconButton(icon: const Icon(Icons.list), onPressed: _pushSaved),
-        ],
-      ),
-      body: _buildSuggestions(),
+  void initState() {
+    super.initState();
+    _list = ListModel<int>(
+      listKey: _listKey,
+      initialItems: <int>[0, 1, 2],
+      removedItemBuilder: _buildRemovedItem,
     );
+    _nextItem = 3;
   }
 
-  void _pushSaved() {
-    Navigator.of(context).push(
-      new MaterialPageRoute<void>(   // Add 20 lines from here...
-        builder: (BuildContext context) {
-          final Iterable<ListTile> tiles = _saved.map(
-            (WordPair pair) {
-              return new ListTile(
-                title: new Text(
-                  pair.asPascalCase,
-                  style: _biggerFont,
-                ),
-              );
-            },
-          );
-          final List<Widget> divided = ListTile
-            .divideTiles(
-              context: context,
-              tiles: tiles,
-            )
-            .toList();
-          return new Scaffold(         // Add 6 lines from here...
-            appBar: new AppBar(
-              title: const Text('Saved Suggestions'),
-            ),
-            body: new ListView(children: divided),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSuggestions() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      // The itemBuilder callback is called once per suggested word pairing,
-      // and places each suggestion into a ListTile row.
-      // For even rows, the function adds a ListTile row for the word pairing.
-      // For odd rows, the function adds a Divider widget to visually
-      // separate the entries. Note that the divider may be difficult
-      // to see on smaller devices.
-      itemBuilder: (context, i) {
-        // Add a one-pixel-high divider widget before each row in theListView.
-        if (i.isOdd) return Divider();
-
-        // The syntax "i ~/ 2" divides i by 2 and returns an integer result.
-        // For example: 1, 2, 3, 4, 5 becomes 0, 1, 1, 2, 2.
-        // This calculates the actual number of word pairings in the ListView,
-        // minus the divider widgets.
-        final index = i ~/ 2;
-        // If you've reached the end of the available word pairings...
-        if (index >= _suggestions.length) {
-          // ...then generate 10 more and add them to the suggestions list.
-          _suggestions.addAll(generateWordPairs().take(10));
-        }
-        return _buildRow(_suggestions[index]);
-      }
-    );
-  }
-
-  Widget _buildRow(WordPair pair) {
-    final bool alreadySaved = _saved.contains(pair);
-    return ListTile(
-      title: Text(
-        pair.asPascalCase,
-        style: _biggerFont,
-      ),
-      trailing: new Icon(   // Add the lines from here... 
-        alreadySaved ? Icons.favorite : Icons.favorite_border,
-        color: alreadySaved ? Colors.red : null,
-      ),
-      onTap: () {      // Add 9 lines from here...
+  // Used to build list items that haven't been removed.
+  Widget _buildItem(
+      BuildContext context, int index, Animation<double> animation) {
+    return CardItem(
+      animation: animation,
+      item: _list[index],
+      selected: _selectedItem == _list[index],
+      onTap: () {
         setState(() {
-          if (alreadySaved) {
-            _saved.remove(pair);
-          } else { 
-            _saved.add(pair); 
-          } 
+          _selectedItem = _selectedItem == _list[index] ? null : _list[index];
         });
       },
     );
   }
+
+  // Used to build an item after it has been removed from the list. This method is
+  // needed because a removed item remains  visible until its animation has
+  // completed (even though it's gone as far this ListModel is concerned).
+  // The widget will be used by the [AnimatedListState.removeItem] method's
+  // [AnimatedListRemovedItemBuilder] parameter.
+  Widget _buildRemovedItem(
+      int item, BuildContext context, Animation<double> animation) {
+    return CardItem(
+      animation: animation,
+      item: item,
+      selected: false,
+      // No gesture detector here: we don't want removed items to be interactive.
+    );
+  }
+
+  // Insert the "next item" into the list model.
+  void _insert() {
+    final int index =
+        _selectedItem == null ? _list.length : _list.indexOf(_selectedItem);
+    _list.insert(index, _nextItem++);
+  }
+
+  // Remove the selected item from the list model.
+  void _remove() {
+    if (_selectedItem != null) {
+      _list.removeAt(_list.indexOf(_selectedItem));
+      setState(() {
+        _selectedItem = null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('AnimatedList'),
+          actions: <Widget>[
+            IconButton(
+              icon: const Icon(Icons.add_circle),
+              onPressed: _insert,
+              tooltip: 'insert a new item',
+            ),
+            IconButton(
+              icon: const Icon(Icons.remove_circle),
+              onPressed: _remove,
+              tooltip: 'remove the selected item',
+            ),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: AnimatedList(
+            key: _listKey,
+            initialItemCount: _list.length,
+            itemBuilder: _buildItem,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class RandomWords extends StatefulWidget {
+/// Keeps a Dart List in sync with an AnimatedList.
+///
+/// The [insert] and [removeAt] methods apply to both the internal list and the
+/// animated list that belongs to [listKey].
+///
+/// This class only exposes as much of the Dart List API as is needed by the
+/// sample app. More list methods are easily added, however methods that mutate the
+/// list must make the same changes to the animated list in terms of
+/// [AnimatedListState.insertItem] and [AnimatedList.removeItem].
+class ListModel<E> {
+  ListModel({
+    @required this.listKey,
+    @required this.removedItemBuilder,
+    Iterable<E> initialItems,
+  })  : assert(listKey != null),
+        assert(removedItemBuilder != null),
+        _items = List<E>.from(initialItems ?? <E>[]);
+
+  final GlobalKey<AnimatedListState> listKey;
+  final dynamic removedItemBuilder;
+  final List<E> _items;
+
+  AnimatedListState get _animatedList => listKey.currentState;
+
+  void insert(int index, E item) {
+    _items.insert(index, item);
+    _animatedList.insertItem(index);
+  }
+
+  E removeAt(int index) {
+    final E removedItem = _items.removeAt(index);
+    if (removedItem != null) {
+      _animatedList.removeItem(index,
+          (BuildContext context, Animation<double> animation) {
+        return removedItemBuilder(removedItem, context, animation);
+      });
+    }
+    return removedItem;
+  }
+
+  int get length => _items.length;
+
+  E operator [](int index) => _items[index];
+
+  int indexOf(E item) => _items.indexOf(item);
+}
+
+/// Displays its integer item as 'item N' on a Card whose color is based on
+/// the item's value. The text is displayed in bright green if selected is true.
+/// This widget's height is based on the animation parameter, it varies
+/// from 0 to 128 as the animation varies from 0.0 to 1.0.
+class CardItem extends StatelessWidget {
+  const CardItem(
+      {Key key,
+      @required this.animation,
+      this.onTap,
+      @required this.item,
+      this.selected: false})
+      : assert(animation != null),
+        assert(item != null && item >= 0),
+        assert(selected != null),
+        super(key: key);
+
+  final Animation<double> animation;
+  final VoidCallback onTap;
+  final int item;
+  final bool selected;
+
   @override
-  RandomWordsState createState() => new RandomWordsState();
+  Widget build(BuildContext context) {
+    TextStyle textStyle = Theme.of(context).textTheme.display1;
+    if (selected)
+      textStyle = textStyle.copyWith(color: Colors.lightGreenAccent[400]);
+    return Padding(
+      padding: const EdgeInsets.all(2.0),
+      child: SizeTransition(
+        axis: Axis.vertical,
+        sizeFactor: animation,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            height: 128.0,
+            child: Card(
+              color: Colors.primaries[item % Colors.primaries.length],
+              child: Center(
+                child: Text('Item $item', style: textStyle),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void main() {
+  runApp(AnimatedListSample());
 }
